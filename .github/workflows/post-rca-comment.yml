@@ -1,0 +1,40 @@
+name: Post Root Cause Analysis Comment
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to comment on'
+        required: true
+        default: '12'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Post Root Cause Analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const issueNumber = ${{ github.event.inputs.issue_number }};
+            
+            // Read the root cause analysis file
+            const commentBody = fs.readFileSync('Act-3/ROOT_CAUSE_ANALYSIS.md', 'utf8');
+            
+            // Post the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: commentBody
+            });
+            
+            console.log(`Posted root cause analysis to issue #${issueNumber}`);
