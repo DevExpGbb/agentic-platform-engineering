@@ -241,7 +241,7 @@ argocd app get 2-broken-apps
 # Expected: Health Status: Healthy, Sync Status: Synced
 
 # 2. Verify all pods are running
-kubectl get pods -n default -l app in (order-service,store-admin,product-service,store-front,makeline-service,mongodb,rabbitmq)
+kubectl get pods -n default | grep -E "(order-service|store-admin|product-service|store-front|makeline-service|mongodb|rabbitmq)"
 
 # Expected: All pods in Running state
 
