@@ -1,0 +1,182 @@
+name: Post ArgoCD RCA to Issue
+
+# This workflow posts the Root Cause Analysis for the ArgoCD deployment failure
+# Trigger it manually after investigation is complete
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to post RCA comment to'
+        required: true
+        type: number
+        default: 12
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post-rca:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Post Root Cause Analysis Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = ${{ github.event.inputs.issue_number }};
+            
+            const rcaComment = `## 🔍 Root Cause Analysis
+
+I've investigated the ArgoCD deployment failure for \`2-broken-apps\` and identified the root cause.
+
+### Issue Summary
+
+**Problem:** Invalid Kubernetes manifest syntax in the source repository
+**Location:** \`apps/broken-aks-store-all-in-one.yaml\` in the source repository
+**Commit:** \`8cd04df204028ff78613a69fdb630625864037c6\`
+**Error Type:** Malformed \`apiVersion\` field
+
+### Detailed Findings
+
+The deployment is failing because of an **intentionally broken** Kubernetes manifest in the source repository (\`https://github.com/dcasati/argocd-notification-examples.git\`).
+
+#### The Specific Error:
+
+In the \`order-service\` Deployment manifest (line 178), the \`apiVersion\` field is malformed:
+
+\`\`\`yaml
+apiVersion: apps/v    # ❌ INVALID - missing version number
+kind: Deployment
+metadata:
+  name: order-service
+\`\`\`
+
+**Expected:**
+\`\`\`yaml
+apiVersion: apps/v1   # ✅ CORRECT
+kind: Deployment
+metadata:
+  name: order-service
+\`\`\`
+
+This was introduced in commit \`8cd04df204028ff78613a69fdb630625864037c6\` with the commit message: **"break apiVersion formatting in deployment YAML"**
+
+### Why ArgoCD Failed
+
+When ArgoCD attempts to sync this application:
+
+1. **Validation Stage:** ArgoCD's application controller validates the manifest
+2. **Error Detection:** The controller detects that \`apiVersion: apps/v\` is not a valid Kubernetes API version
+3. **Sync Failure:** ArgoCD marks the synchronization as invalid and fails after the configured retry limit (2 attempts)
+4. **Result:** Application status becomes \`Degraded\` and \`OutOfSync\`
+
+The error message **"one or more synchronization tasks are not valid"** is ArgoCD's way of indicating that the manifests failed validation before they could even be applied to the cluster.
+
+---
+
+## 🛠️ Remediation Recommendations
+
+### Option 1: Fix the Source Repository (Recommended)
+
+This application appears to be a **test/demo application** designed to trigger failures for testing ArgoCD notifications. If you want the application to deploy successfully:
+
+**Steps:**
+1. Fork or update the source repository: \`https://github.com/dcasati/argocd-notification-examples.git\`
+2. Fix the malformed \`apiVersion\` in \`apps/broken-aks-store-all-in-one.yaml\`:
+   \`\`\`bash
+   # Navigate to the repository
+   cd /path/to/argocd-notification-examples
+   
+   # Fix the apiVersion (line 178)
+   sed -i 's/apiVersion: apps\\\\/v$/apiVersion: apps\\\\/v1/' apps/broken-aks-store-all-in-one.yaml
+   
+   # Commit and push
+   git commit -am "Fix apiVersion for order-service deployment"
+   git push
+   \`\`\`
+3. ArgoCD will automatically detect the change and retry the sync
+
+### Option 2: Update to Use a Valid Application Repository
+
+If you need a working AKS Store demo application:
+
+**Steps:**
+1. Update the ArgoCD Application manifest (\`Act-3/argocd-test-app.yaml\`) to point to a valid repository:
+   \`\`\`yaml
+   source:
+     # Use the official AKS store demo repository
+     repoURL: https://github.com/Azure-Samples/aks-store-demo.git
+     targetRevision: main
+     path: charts/aks-store-demo  # Or appropriate path
+   \`\`\`
+2. Apply the updated manifest:
+   \`\`\`bash
+   kubectl apply -f Act-3/argocd-test-app.yaml
+   \`\`\`
+
+### Option 3: Accept This as Expected Behavior (If Testing Notifications)
+
+If this application (\`2-broken-apps\`) is **intentionally broken** to test the ArgoCD notification system:
+
+**Action:** No fix needed! The system is working as designed:
+- ✅ ArgoCD detects the failure
+- ✅ ArgoCD Notifications sends webhook to GitHub
+- ✅ GitHub Actions workflow creates this issue automatically
+- ✅ Issue contains detailed error information
+
+**Recommendation:** Add a label like \`wontfix\` or \`expected-failure\` to this issue to document that this is intentional behavior for testing purposes.
+
+---
+
+## 📊 Additional Context
+
+### What Makes This Error Difficult to Debug
+
+1. **Generic Error Message:** "one or more synchronization tasks are not valid" doesn't immediately point to the specific field
+2. **Validation Failure:** The error occurs during manifest validation, not during actual deployment
+3. **No Kubernetes Events:** Since the manifest never reaches the cluster, there are no pod-level events to inspect
+
+### Validation Test Performed
+
+I validated the YAML file and confirmed the error:
+\`\`\`
+Document 8: order-service Deployment
+apiVersion: apps/v
+❌ ERROR: Invalid apiVersion!
+   Expected: apps/v1
+   Found: apps/v
+\`\`\`
+
+### Similar Issues to Watch For
+
+This type of error ("one or more synchronization tasks are not valid") can also be caused by:
+- Missing required fields in manifests
+- Invalid Kubernetes resource API versions
+- Malformed YAML syntax
+- Resources not available in the target Kubernetes version
+- RBAC permission issues (less common with this specific error)
+
+---
+
+## 🎯 Recommended Next Steps
+
+1. **Determine Intent:** Clarify whether this application is meant to fail (for testing) or should be fixed
+2. **Take Action:** Based on intent, choose one of the three options above
+3. **Monitor:** After any fix, watch the ArgoCD application status: \`argocd app get 2-broken-apps\`
+4. **Close Issue:** Once resolved (or marked as expected), close this issue with appropriate labels
+
+---
+
+**Investigation Completed:** ${new Date().toISOString()}
+**Analyst:** GitHub Copilot Agent`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: rcaComment
+            });
+            
+            console.log(`✅ Posted RCA comment to issue #${issueNumber}`);
