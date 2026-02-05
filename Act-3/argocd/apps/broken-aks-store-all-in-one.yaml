@@ -294,10 +294,10 @@ spec:
           resources:
             requests:
               cpu: 1m
-              memory: 6Mi
+              memory: 64Mi
             limits:
-              cpu: 5m
-              memory: 20Mi
+              cpu: 50m
+              memory: 128Mi
           startupProbe:
             httpGet:
               path: /health
@@ -335,6 +335,62 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: ai-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+        - name: ai-service
+          image: ghcr.io/azure-samples/aks-store-demo/ai-service:2.1.0
+          ports:
+            - containerPort: 5001
+          resources:
+            requests:
+              cpu: 5m
+              memory: 64Mi
+            limits:
+              cpu: 50m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            failureThreshold: 3
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            failureThreshold: 5
+            initialDelaySeconds: 3
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 5001
+      targetPort: 5001
+  selector:
+    app: ai-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: product-service
 spec:
   replicas: 1
@@ -359,10 +415,10 @@ spec:
           resources:
             requests:
               cpu: 1m
-              memory: 1Mi
+              memory: 64Mi
             limits:
-              cpu: 2m
-              memory: 20Mi
+              cpu: 50m
+              memory: 128Mi
           readinessProbe:
             httpGet:
               path: /health
@@ -544,10 +600,10 @@ spec:
           resources:
             requests:
               cpu: 1m
-              memory: 1Mi
+              memory: 32Mi
             limits:
-              cpu: 2m
-              memory: 20Mi
+              cpu: 25m
+              memory: 64Mi
           readinessProbe:
             exec:
               command:
@@ -592,10 +648,10 @@ spec:
           resources:
             requests:
               cpu: 1m
-              memory: 1Mi
+              memory: 32Mi
             limits:
-              cpu: 2m
-              memory: 20Mi
+              cpu: 25m
+              memory: 64Mi
           readinessProbe:
             exec:
               command:
