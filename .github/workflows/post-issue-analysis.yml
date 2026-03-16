@@ -1,0 +1,33 @@
+name: Post Issue Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to post analysis to'
+        required: true
+        default: '12'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Post analysis as comment using gh CLI
+        run: |
+          # Remove the note section at the end of the file
+          sed '/^---$/,$ d' .github/ISSUE_12_ANALYSIS.md > /tmp/clean-analysis.md
+          
+          # Post the comment using gh CLI
+          gh issue comment ${{ github.event.inputs.issue_number }} --body-file /tmp/clean-analysis.md
+          
+          echo "✅ Posted analysis to issue #${{ github.event.inputs.issue_number }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
