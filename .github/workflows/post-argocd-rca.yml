@@ -1,0 +1,38 @@
+name: Post ArgoCD RCA to Issue
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to post RCA to'
+        required: true
+        type: number
+      rca_content:
+        description: 'Root Cause Analysis content'
+        required: true
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  post-rca:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Post RCA Comment to Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = ${{ inputs.issue_number }};
+            const rcaContent = `${{ inputs.rca_content }}`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: rcaContent
+            });
+            
+            console.log(`✅ Posted RCA to issue #${issueNumber}`);
